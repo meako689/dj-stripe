@@ -478,7 +478,7 @@ class StripeCharge(StripeObject):
         :param data: stripe object
         :type data: dict
         """
-        return manager.get_by_json(data, "invoice") if "invoice" in data else None
+        return manager.get_by_json(data, "invoice") if data.get("invoice") else None
 
     @classmethod
     def stripe_object_to_record(cls, data):
