@@ -51,7 +51,7 @@ class TestCustomer(TestCase):
     def create_subscription(self):
         return Subscription.objects.create(stripe_id="sub_yyyyyyyyyyyyyy",
                                            customer=self.customer,
-                                           plan="test_plan",
+                                           plan=basic_plan,
                                            quantity=1,
                                            start=timezone.now(),
                                            amount=decimal.Decimal(25.00))
@@ -517,7 +517,7 @@ class TestCustomer(TestCase):
 
         #plan_getter_mock.assert_called_with("fish")
 
-        self.assertEqual(fish_plan, subscriptions.plan)
+        self.assertEqual(fish_plan, subscription.plan)
         self.assertEqual(decimal.Decimal("50.00"), subscription.amount)
         self.assertEqual("tree", subscription.status)
         self.assertEqual(5, subscription.quantity)

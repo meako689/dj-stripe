@@ -40,7 +40,7 @@ class SubscriptionSerializerTest(TestCase):
             'stripe_id': 'sub_yyyyyyyyyyyyyy',
             'quantity': 2,
             'start': now,
-            'status': CurrentSubscription.STATUS_ACTIVE,
+            'status': Subscription.STATUS_ACTIVE,
             'amount': Decimal('100'),
             'plan': test0,
         })

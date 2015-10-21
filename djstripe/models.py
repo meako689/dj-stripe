@@ -599,7 +599,7 @@ class Customer(StripeObject):
             self.sync_subscriptions()
             raise SubscriptionUpdateFailure("Customer does not have a subscription with Stripe")
         self.subscribe(
-            plan=self.stripe_customer.subscription.plan.id,
+            plan=self.stripe_customer.subscriptions.data[0].plan.id,
             quantity=quantity,
             charge_immediately=charge_immediately,
             subscription=subscription
@@ -645,7 +645,7 @@ class Customer(StripeObject):
             self.sync_current_subscription()
         if charge_immediately:
             self.send_invoice()
-        subscription_made.send(sender=self, plan=plan_instance, stripe_response=resp)
+        subscription_made.send(sender=self, plan=plan_instance, stripe_response=response)
 
     def charge(self, amount, currency="usd", description=None, send_receipt=True, **kwargs):
         """
@@ -720,7 +720,7 @@ class Subscription(StripeObject):
         related_name="subscriptions",
         null=True
     )
-    plan = models.ForeignKey('Plan', related_name='current_subscription', blank=True, null=True)
+    plan = models.ForeignKey('Plan', related_name='subscription', blank=True, null=True)
     quantity = models.IntegerField()
     start = models.DateTimeField()
     # trialing, active, past_due, canceled, or unpaid

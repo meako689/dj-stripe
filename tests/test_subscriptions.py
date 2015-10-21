@@ -11,9 +11,8 @@ from mock import patch, PropertyMock, MagicMock
 
 from djstripe.exceptions import SubscriptionApiError, SubscriptionCancellationFailure, SubscriptionUpdateFailure
 from djstripe.models import convert_tstamp, Customer, Subscription
-from djstripe.settings import PAYMENTS_PLANS
 from tests import convert_to_fake_stripe_object
-from .plan_instances import basic_plan as plan
+from .plan_instances import basic_plan as plan, gold_plan as gold
 
 
 def timestamp(year, month, day, hour, minute=0, second=0):
@@ -114,27 +113,18 @@ DUMMY_CUSTOMER_WITH_BOTH_SUBS["subscriptions"]["data"][1]["id"] = "sub_zzzzzzzzz
 
 def create_subscription(customer, plan=plan):
     return Subscription.objects.create(
-        stripe_id="sub_yyyyyyyyyyyyyy" if plan.id == "basic" else "sub_zzzzzzzzzzzzzz", #TODO 
+        stripe_id="sub_yyyyyyyyyyyyyy" if plan.stripe_id == "basic_id" else "sub_zzzzzzzzzzzzzz", #TODO 
         customer=customer,
         plan=plan,
         quantity=1,
         start=convert_tstamp(1395527780),
-        amount=decimal.Decimal("100.00" if plan == "basic" else "1000.00"),
+        amount=decimal.Decimal("100.00" if plan.stripe_id == "basic_id" else "1000.00"),
         status="trialing"
     )
     
 
 class TestMultipleSubscriptions(TestCase):
 
-    @classmethod
-    def setupClass(cls):
-        PAYMENTS_PLANS["basic"] = BASIC_PLAN
-        PAYMENTS_PLANS["gold"] = GOLD_PLAN
-
-    @classmethod
-    def tearDownClass(cls):
-        del PAYMENTS_PLANS["basic"]
-        del PAYMENTS_PLANS["gold"]
         
     def setUp(self):
         Customer.allow_multiple_subscriptions = True
@@ -166,14 +156,14 @@ class TestMultipleSubscriptions(TestCase):
                                           convert_to_fake_stripe_object(DUMMY_CUSTOMER_WITH_SUB_BASIC),
                                           convert_to_fake_stripe_object(DUMMY_CUSTOMER_WITH_BOTH_SUBS)]
         self.assertEqual(self.customer.subscriptions.count(), 0)
-        self.customer.subscribe("basic", charge_immediately=False)
+        self.customer.subscribe("basic_id", charge_immediately=False)
         self.assertEqual(self.customer.subscriptions.count(), 1)
         sub_basic = self.customer.subscriptions.all()[0]
         self.assertEqual(sub_basic.quantity, 1)
         self.assertEqual(sub_basic.amount, decimal.Decimal("100.00"))
-        self.customer.subscribe("gold", charge_immediately=False)
+        self.customer.subscribe("gold_id", charge_immediately=False)
         self.assertEqual(self.customer.subscriptions.count(), 2)
-        sub_gold = self.customer.subscriptions.get(plan="gold")
+        sub_gold = self.customer.subscriptions.get(plan=gold)
         self.assertEqual(sub_gold.quantity, 1)
         self.assertEqual(sub_gold.amount, decimal.Decimal("1000.00"))
         self.assertNotEqual(sub_basic.stripe_id, sub_gold.stripe_id)
@@ -186,10 +176,10 @@ class TestMultipleSubscriptions(TestCase):
                                           convert_to_fake_stripe_object(DUMMY_CUSTOMER_WITH_SUB_BASIC),
                                           convert_to_fake_stripe_object(DUMMY_CUSTOMER_WITH_SUB_BASIC),
                                           convert_to_fake_stripe_object(DUMMY_CUSTOMER_WITH_SUB_BASIC)]
-        self.customer.subscribe("basic", charge_immediately=False)
+        self.customer.subscribe("basic_id", charge_immediately=False)
         self.assertEqual(self.customer.subscriptions.count(), 1)
         sub_basic = self.customer.subscriptions.all()[0]
-        self.customer.subscribe("basic", trial_days=10, charge_immediately=False, subscription=sub_basic)
+        self.customer.subscribe("basic_id", trial_days=10, charge_immediately=False, subscription=sub_basic)
         self.assertEqual(self.customer.subscriptions.count(), 1)
         SubscriptionSaveMock.assert_called_once_with()
         
@@ -200,10 +190,10 @@ class TestMultipleSubscriptions(TestCase):
                                           convert_to_fake_stripe_object(DUMMY_CUSTOMER_WITH_SUB_GOLD)]
         create_subscription(self.customer)
         self.assertEqual(self.customer.subscriptions.count(), 1)
-        sub = self.customer.subscriptions.get(plan="basic")
-        self.customer.subscribe("gold", charge_immediately=False, subscription=sub)
+        sub = self.customer.subscriptions.get(plan=plan)
+        self.customer.subscribe("gold_id", charge_immediately=False, subscription=sub)
         self.assertEqual(self.customer.subscriptions.count(), 1)
-        sub = self.customer.subscriptions.get(plan="gold")
+        sub = self.customer.subscriptions.get(plan=gold)
         self.assertEqual(sub.amount, decimal.Decimal("1000.00"))
         
     def test_cancel_with_no_sub_param(self):
@@ -217,21 +207,21 @@ class TestMultipleSubscriptions(TestCase):
                                           convert_to_fake_stripe_object(DUMMY_CUSTOMER_WITH_SUB_GOLD)]
         SubscriptionDeleteMock.return_value = convert_to_fake_stripe_object(DUMMY_SUB_BASIC_CANCELED)
         create_subscription(self.customer)
-        create_subscription(self.customer, "gold")
-        sub_basic = self.customer.subscriptions.get(plan="basic")
+        create_subscription(self.customer, gold)
+        sub_basic = self.customer.subscriptions.get(plan=plan)
         self.assertEqual(sub_basic.status, "trialing")
-        self.assertEqual(sub_basic.plan, "basic")
+        self.assertEqual(sub_basic.plan, plan)
         self.customer.cancel_subscription(at_period_end=False, subscription=sub_basic)
         self.assertEqual(self.customer.subscriptions.count(), 2)
         self.assertEqual(sub_basic.status, "canceled")
         self.assertEqual(sub_basic.canceled_at, convert_tstamp(CANCELED_TIME))
-        sub_gold = self.customer.subscriptions.get(plan="gold")
+        sub_gold = self.customer.subscriptions.get(plan=gold)
         self.assertEqual(sub_gold.status, "trialing")
         # Now, after a synchronise, canceled subs will be removed.
         self.customer.sync_subscriptions()
         self.assertEqual(self.customer.subscriptions.count(), 1)
         with self.assertRaises(Subscription.DoesNotExist):
-            self.customer.subscriptions.get(plan="basic")
+            self.customer.subscriptions.get(plan=plan)
         
     @patch("stripe.resource.Subscription.delete")
     @patch("djstripe.models.Customer.stripe_customer", new_callable=PropertyMock)
@@ -262,11 +252,12 @@ class TestMultipleSubscriptions(TestCase):
         dummy_customer["subscriptions"]["data"][0]["quantity"] = 2
         StripeCustomerMock.side_effect = [convert_to_fake_stripe_object(DUMMY_CUSTOMER_WITH_SUB_BASIC),
                                           convert_to_fake_stripe_object(DUMMY_CUSTOMER_WITH_SUB_BASIC),
+                                          convert_to_fake_stripe_object(DUMMY_CUSTOMER_WITH_SUB_BASIC),
                                           convert_to_fake_stripe_object(dummy_customer)]
         create_subscription(self.customer)
         self.customer.update_plan_quantity(2, charge_immediately=False,
-                                           subscription=self.customer.subscriptions.get(plan="basic"))
-        self.assertEqual(self.customer.subscriptions.get(plan="basic").quantity, 2)
+                                           subscription=self.customer.subscriptions.get(plan=plan))
+        self.assertEqual(self.customer.subscriptions.get(plan=plan).quantity, 2)
 
     @patch("stripe.resource.Subscription.save")
     @patch("djstripe.models.Customer.stripe_customer", new_callable=PropertyMock)
@@ -285,7 +276,7 @@ class TestMultipleSubscriptions(TestCase):
                                                subscription=stripe_subscription)
         # didnt update anything, stripe_subscription matches nothing attached to this
         # customer
-        self.assertEqual(self.customer.subscriptions.get(plan="basic").quantity, 1)
+        self.assertEqual(self.customer.subscriptions.get(plan=plan).quantity, 1)
         
     @patch("djstripe.models.Customer.stripe_customer", new_callable=PropertyMock)
     def test_sync_with_retain_canceled(self, StripeCustomerMock):
@@ -310,7 +301,7 @@ class TestMultipleSubscriptions(TestCase):
     def test_sync_with_no_subscriptions_multiple(self, StripeCustomerMock):
         StripeCustomerMock.side_effect = [convert_to_fake_stripe_object(DUMMY_CUSTOMER_WITHOUT_SUB)]
         sub_basic = create_subscription(self.customer)
-        create_subscription(self.customer, "gold")
+        create_subscription(self.customer, gold)
         self.assertEqual(self.customer.subscriptions.count(), 2)
         sub_basic.status = Subscription.STATUS_CANCELLED
         sub_basic.save()
@@ -318,23 +309,14 @@ class TestMultipleSubscriptions(TestCase):
         self.customer.sync_subscriptions()
         Customer.retain_canceled_subscriptions = False
         self.assertEqual(self.customer.subscriptions.count(), 2)
-        sub_basic = self.customer.subscriptions.get(plan="basic")
+        sub_basic = self.customer.subscriptions.get(plan=plan)
         self.assertEqual(sub_basic.status, Subscription.STATUS_CANCELLED)
-        sub_gold = self.customer.subscriptions.get(plan="gold")
+        sub_gold = self.customer.subscriptions.get(plan=gold)
         self.assertEqual(sub_gold.status, Subscription.STATUS_CANCELLED)
 
 
 class TestSingleSubscription(TestCase):
 
-    @classmethod
-    def setupClass(cls):
-        PAYMENTS_PLANS["basic"] = BASIC_PLAN
-        PAYMENTS_PLANS["gold"] = GOLD_PLAN
-
-    @classmethod
-    def tearDownClass(cls):
-        del PAYMENTS_PLANS["basic"]
-        del PAYMENTS_PLANS["gold"]
         
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="chris")
@@ -507,7 +489,7 @@ class CurrentSubscriptionTest(TestCase):
 
     def setUp(self):
         self.current_subscription = Subscription.objects.create(stripe_id="sub_yyyyyyyyyyyyyy",
-                                                                plan=self.plan,
+                                                                plan=plan,
                                                                 quantity=1,
                                                                 start=timezone.now(),
                                                                 amount=decimal.Decimal(25.00),

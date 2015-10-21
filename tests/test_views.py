@@ -58,7 +58,7 @@ class AccountViewTest(TestCase):
         response = self.client.get(self.url)
         self.assertEqual(None, response.context["subscription"])
 
-    @patch("djstripe.models.Customer.current_subscription", new_callable=PropertyMock, return_value=Subscription(plan="test_plan_07"))
+    @patch("djstripe.models.Customer.current_subscription", new_callable=PropertyMock, return_value=Subscription(plan=test_plan_07))
     @patch("stripe.Customer.create", return_value=PropertyMock(id=fake_stripe_customer_id))
     def test_subscription_context_with_plan(self, djstripe_customer_customer_subscription_mock, stripe_create_customer_mock):
         response = self.client.get(self.url)
@@ -255,7 +255,7 @@ class ChangePlanViewTest(TestCase):
         self.assertIn("form", response.context)
         self.assertIn("You must already be subscribed to a plan before you can change it.", response.context["form"].errors["__all__"])
 
-    @patch("djstripe.models.Customer.current_subscription", new_callable=PropertyMock, return_value=CurrentSubscription(plan=test_plan, amount=Decimal(25.00)))
+    @patch("djstripe.models.Customer.current_subscription", new_callable=PropertyMock, return_value=Subscription(plan=test_plan, amount=Decimal(25.00)))
     @patch("djstripe.models.Customer.subscribe", autospec=True)
     def test_change_sub_no_proration(self, subscribe_mock, current_subscription_mock):
         self.assertTrue(self.client.login(username="testuser1", password="123"))
@@ -265,7 +265,7 @@ class ChangePlanViewTest(TestCase):
         subscribe_mock.assert_called_once_with(self.user1.customer, "test0")
 
     @patch("djstripe.views.PRORATION_POLICY_FOR_UPGRADES", return_value=True)
-    @patch("djstripe.models.Customer.current_subscription", new_callable=PropertyMock, return_value=CurrentSubscription(plan=test_plan, amount=Decimal(25.00)))
+    @patch("djstripe.models.Customer.current_subscription", new_callable=PropertyMock, return_value=Subscription(plan=test_plan, amount=Decimal(25.00)))
     @patch("djstripe.models.Customer.subscribe", autospec=True)
     def test_change_sub_with_proration_downgrade(self, subscribe_mock, current_subscription_mock, proration_policy_mock):
         self.assertTrue(self.client.login(username="testuser1", password="123"))

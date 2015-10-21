@@ -1,19 +1,23 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 
-from django.db import migrations
+from django.db import models, migrations
 
 
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('djstripe', '0009_copy_subscriptions'),
+        ('djstripe', '0012_merge'),
     ]
 
     operations = [
         migrations.RemoveField(
             model_name='currentsubscription',
             name='customer',
+        ),
+        migrations.RemoveField(
+            model_name='currentsubscription',
+            name='plan',
         ),
         migrations.DeleteModel(
             name='CurrentSubscription',
