@@ -438,7 +438,7 @@ class Customer(StripeObject):
         stripe_customer = self.stripe_customer
         stripe_customer.card = token
         stripe_customer.save()
-        default_card = any(filter(lambda c: c.id == stripe_customer.default_card, stripe_customer.cards.data))
+        default_card = filter(lambda c: c.id == stripe_customer.default_card, stripe_customer.cards.data)[0]
         self.card_fingerprint = default_card.fingerprint
         self.card_last_4 = default_card.last4
         self.card_kind = default_card.type
@@ -472,7 +472,7 @@ class Customer(StripeObject):
             self.purge()
         elif getattr(stripe_customer, 'default_card', None):
 
-            default_card = any(filter(lambda c: c.id == stripe_customer.default_card, stripe_customer.cards.data))
+            default_card = filter(lambda c: c.id == stripe_customer.default_card, stripe_customer.cards.data)[0]
             self.card_fingerprint = default_card.fingerprint
             self.card_last_4 = default_card.last4
             self.card_kind = default_card.type
