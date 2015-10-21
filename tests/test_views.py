@@ -18,7 +18,7 @@ import stripe
 from mock import patch, PropertyMock
 
 from djstripe import settings as djstripe_settings
-from djstripe.models import Customer, CurrentSubscription, Plan
+from djstripe.models import Customer, Subscription, Plan
 from djstripe.views import ChangeCardView, HistoryView
 
 from .plan_instances import basic_plan as test_plan_07
@@ -58,7 +58,7 @@ class AccountViewTest(TestCase):
         response = self.client.get(self.url)
         self.assertEqual(None, response.context["subscription"])
 
-    @patch("djstripe.models.Customer.current_subscription", new_callable=PropertyMock, return_value=CurrentSubscription(plan=test_plan_07))
+    @patch("djstripe.models.Customer.current_subscription", new_callable=PropertyMock, return_value=Subscription(plan="test_plan_07"))
     @patch("stripe.Customer.create", return_value=PropertyMock(id=fake_stripe_customer_id))
     def test_subscription_context_with_plan(self, djstripe_customer_customer_subscription_mock, stripe_create_customer_mock):
         response = self.client.get(self.url)
@@ -275,7 +275,7 @@ class ChangePlanViewTest(TestCase):
         subscribe_mock.assert_called_once_with(self.user1.customer, "test0", prorate=True)
 
     @patch("djstripe.views.PRORATION_POLICY_FOR_UPGRADES", return_value=True)
-    @patch("djstripe.models.Customer.current_subscription", new_callable=PropertyMock, return_value=CurrentSubscription(plan=test_plan, amount=Decimal(25.00)))
+    @patch("djstripe.models.Customer.current_subscription", new_callable=PropertyMock, return_value=Subscription(plan=test_plan, amount=Decimal(25.00)))
     @patch("djstripe.models.Customer.subscribe", autospec=True)
     def test_change_sub_with_proration_upgrade(self, subscribe_mock, current_subscription_mock, proration_policy_mock):
         self.assertTrue(self.client.login(username="testuser1", password="123"))
@@ -286,7 +286,7 @@ class ChangePlanViewTest(TestCase):
         subscribe_mock.assert_called_once_with(self.user1.customer, "test2", prorate=True)
 
     @patch("djstripe.views.PRORATION_POLICY_FOR_UPGRADES", return_value=True)
-    @patch("djstripe.models.Customer.current_subscription", new_callable=PropertyMock, return_value=CurrentSubscription(plan=test_plan, amount=Decimal(25.00)))
+    @patch("djstripe.models.Customer.current_subscription", new_callable=PropertyMock, return_value=Subscription(plan=test_plan, amount=Decimal(25.00)))
     @patch("djstripe.models.Customer.subscribe", autospec=True)
     def test_change_sub_with_proration_same_plan(self, subscribe_mock, current_subscription_mock, proration_policy_mock):
         self.assertTrue(self.client.login(username="testuser1", password="123"))
@@ -295,7 +295,7 @@ class ChangePlanViewTest(TestCase):
 
         subscribe_mock.assert_called_once_with(self.user1.customer, "test", prorate=True)
 
-    @patch("djstripe.models.Customer.current_subscription", new_callable=PropertyMock, return_value=CurrentSubscription(plan=test_plan, amount=Decimal(25.00)))
+    @patch("djstripe.models.Customer.current_subscription", new_callable=PropertyMock, return_value=Subscription(plan=test_plan, amount=Decimal(25.00)))
     @patch("djstripe.models.Customer.subscribe", autospec=True)
     def test_change_sub_same_plan(self, subscribe_mock, current_subscription_mock):
         self.assertTrue(self.client.login(username="testuser1", password="123"))
@@ -325,7 +325,7 @@ class CancelSubscriptionViewTest(TestCase):
         self.assertTrue(self.client.login(username="testuser", password="123"))
 
     @patch("stripe.Customer.create", return_value=PropertyMock(id="cus_xxx1234567890"))
-    @patch("djstripe.models.Customer.cancel_subscription", return_value=CurrentSubscription(status=CurrentSubscription.STATUS_ACTIVE))
+    @patch("djstripe.models.Customer.cancel_subscription", return_value=Subscription(status=Subscription.STATUS_ACTIVE))
     def test_cancel_proration(self, cancel_subscription_mock, stripe_create_customer_mock):
         response = self.client.post(self.url)
 
@@ -335,7 +335,7 @@ class CancelSubscriptionViewTest(TestCase):
 
     @patch("djstripe.views.auth_logout", autospec=True)
     @patch("stripe.Customer.create", return_value=PropertyMock(id="cus_xxx1234567890"))
-    @patch("djstripe.models.Customer.cancel_subscription", return_value=CurrentSubscription(status=CurrentSubscription.STATUS_CANCELLED))
+    @patch("djstripe.models.Customer.cancel_subscription", return_value=Subscription(status=Subscription.STATUS_CANCELLED))
     def test_cancel_no_proration(self, cancel_subscription_mock, stripe_create_customer_mock, logout_mock):
         response = self.client.post(self.url)
 

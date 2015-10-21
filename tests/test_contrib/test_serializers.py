@@ -16,7 +16,7 @@ from django.conf import settings
 
 from mock import patch, PropertyMock
 from djstripe.contrib.rest_framework.serializers import SubscriptionSerializer, CreateSubscriptionSerializer
-from djstripe.models import CurrentSubscription
+from djstripe.models import Subscription
 
 from ..plan_instances import test0
 
@@ -27,15 +27,17 @@ class SubscriptionSerializerTest(TestCase):
         now = timezone.now()
         serializer = SubscriptionSerializer(
             data={
+                'stripe_id': 'sub_yyyyyyyyyyyyyy',
                 'plan': test0.pk,
                 'quantity': 2,
                 'start': now,
-                'status': CurrentSubscription.STATUS_ACTIVE,
+                'status': Subscription.STATUS_ACTIVE,
                 'amount': test0.amount,
             }
         )
         self.assertTrue(serializer.is_valid())
-        self.assertEqual(dict(serializer.validated_data), {
+        self.assertEqual(serializer.validated_data, {
+            'stripe_id': 'sub_yyyyyyyyyyyyyy',
             'quantity': 2,
             'start': now,
             'status': CurrentSubscription.STATUS_ACTIVE,
@@ -48,10 +50,11 @@ class SubscriptionSerializerTest(TestCase):
         now = timezone.now()
         serializer = SubscriptionSerializer(
             data={
+                'stripe_id': 'sub_yyyyyyyyyyyyyy',
                 'plan': test0.pk,
                 'start': now,
-                'status': CurrentSubscription.STATUS_ACTIVE,
                 'amount': test0.amount,
+                'status': Subscription.STATUS_ACTIVE,
             }
         )
         self.assertFalse(serializer.is_valid())

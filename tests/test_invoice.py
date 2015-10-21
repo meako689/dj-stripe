@@ -14,6 +14,7 @@ from django.test.testcases import TestCase
 from django.utils import timezone
 
 from mock import patch
+from djstripe.event_handlers import invoice_webhook_handler
 
 from djstripe.models import Customer, Invoice, Charge, Event
 from .plan_instances import basic_plan
@@ -224,21 +225,11 @@ class InvoiceTest(TestCase):
         self.assertFalse(send_receipt_mock.called)
 
     @patch("djstripe.models.Invoice.sync_from_stripe_data")
-    @patch("stripe.Invoice.retrieve", return_value="key")
-    def test_handle_event_fake(self, invoice_retrieve_mock, sync_invoice_mock):
-        fake_event = Event(kind="fake", message={"data": {"object": {"id": "door"}}})
-
-        Invoice.handle_event(fake_event)
-
-        self.assertFalse(invoice_retrieve_mock.called)
-        self.assertFalse(sync_invoice_mock.called)
-
-    @patch("djstripe.models.Invoice.sync_from_stripe_data")
     @patch("stripe.Invoice.retrieve", return_value="lock")
     def test_handle_event_payment_failed(self, invoice_retrieve_mock, sync_invoice_mock):
         fake_event = Event(kind="invoice.payment_failed", validated_message={"data": {"object": {"id": "door"}}})
 
-        Invoice.handle_event(fake_event)
+        invoice_webhook_handler(fake_event, fake_event.message["data"], "invoice", "payment_failed")
 
         invoice_retrieve_mock.assert_called_once_with("door")
         sync_invoice_mock.assert_called_once_with("lock", send_receipt=True)
@@ -246,9 +237,9 @@ class InvoiceTest(TestCase):
     @patch("djstripe.models.Invoice.sync_from_stripe_data")
     @patch("stripe.Invoice.retrieve", return_value="key")
     def test_handle_event_payment_succeeded(self, invoice_retrieve_mock, sync_invoice_mock):
-        fake_event = Event(kind="invoice.payment_failed", validated_message={"data": {"object": {"id": "lock"}}})
+        fake_event = Event(kind="invoice.payment_succeeded", validated_message={"data": {"object": {"id": "lock"}}})
 
-        Invoice.handle_event(fake_event)
+        invoice_webhook_handler(fake_event, fake_event.message["data"], "invoice", "payment_failed")
 
         invoice_retrieve_mock.assert_called_once_with("lock")
         sync_invoice_mock.assert_called_once_with("key", send_receipt=True)

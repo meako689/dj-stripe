@@ -10,7 +10,7 @@ from django.test.client import RequestFactory
 from django.utils import timezone
 
 from djstripe.decorators import subscription_payment_required
-from djstripe.models import Customer, CurrentSubscription
+from djstripe.models import Customer, Subscription
 
 from .plan_instances import basic_plan as plan
 
@@ -86,7 +86,8 @@ class TestSubscriptionPaymentRequired(TestCase):
             card_last_4="2342",
             card_kind="Visa"
         )
-        CurrentSubscription.objects.create(
+        Subscription.objects.create(
+            stripe_id="sub_xxxxxxxxxxxxxxx",
             customer=customer,
             plan=plan,
             current_period_start=period_start,

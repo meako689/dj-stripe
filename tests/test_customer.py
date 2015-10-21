@@ -19,15 +19,24 @@ from mock import patch, PropertyMock, MagicMock
 import stripe
 from unittest2 import TestCase as AssertWarnsEnabledTestCase
 
-from djstripe.models import Customer, Charge, CurrentSubscription
 from .plan_instances import basic_plan, fish_plan
-
+from djstripe.models import Customer, Charge, Subscription
 
 class TestCustomer(TestCase):
-    fake_current_subscription = CurrentSubscription(plan=basic_plan,
+    fake_current_subscription = Subscription(stripe_id="sub_yyyyyyyyyyyyyy",
+                                                    plan=basic_plan,
                                                     quantity=1,
                                                     start=timezone.now(),
                                                     amount=decimal.Decimal(25.00))
+
+    
+    # This is not presently used, because create_subscription() needs to utilised instead.
+    fake_current_subscription_cancelled_in_stripe = Subscription(stripe_id="sub_yyyyyyyyyyyyyy",
+                                                                 plan=basic_plan,
+                                                                 quantity=1,
+                                                                 start=timezone.now(),
+                                                                 amount=decimal.Decimal(25.00),
+                                                                 status=Subscription.STATUS_ACTIVE)
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="patrick", email="patrick@gmail.com")
@@ -38,6 +47,14 @@ class TestCustomer(TestCase):
             card_last_4="2342",
             card_kind="Visa"
         )
+
+    def create_subscription(self):
+        return Subscription.objects.create(stripe_id="sub_yyyyyyyyyyyyyy",
+                                           customer=self.customer,
+                                           plan="test_plan",
+                                           quantity=1,
+                                           start=timezone.now(),
+                                           amount=decimal.Decimal(25.00))
 
     def test_tostring(self):
         self.assertEquals("<patrick, stripe_id=cus_xxxxxxxxxxxxxxx>", str(self.customer))
@@ -402,7 +419,8 @@ class TestCustomer(TestCase):
                 type="apple",
                 exp_month=12,
                 exp_year=2020,
-            )
+            ),
+            deleted=False
         )
 
         self.customer.sync()
@@ -413,12 +431,23 @@ class TestCustomer(TestCase):
         self.assertEqual(2020, self.customer.card_exp_year)
 
     @patch("djstripe.models.Customer.stripe_customer", new_callable=PropertyMock,
-           return_value=PropertyMock(active_card=None))
+           return_value=PropertyMock(active_card=None, deleted=False))
     def test_sync_no_card(self, stripe_customer_mock):
         self.customer.sync()
         self.assertEqual("YYYYYYYY", self.customer.card_fingerprint)
         self.assertEqual("2342", self.customer.card_last_4)
         self.assertEqual("Visa", self.customer.card_kind)
+
+    @patch("djstripe.models.Customer.stripe_customer", new_callable=PropertyMock,
+           return_value=PropertyMock(deleted=True))
+    def test_sync_deleted_in_stripe(self, stripe_customer_mock):
+        self.customer.sync()
+        customer = Customer.objects.get(stripe_id=self.customer.stripe_id)
+        self.assertTrue(customer.subscriber is None)
+        self.assertTrue(customer.card_fingerprint == "")
+        self.assertTrue(customer.card_last_4 == "")
+        self.assertTrue(customer.card_kind == "")
+        self.assertTrue(get_user_model().objects.filter(pk=self.user.pk).exists())
 
     @patch("djstripe.models.Invoice.sync_from_stripe_data")
     @patch("djstripe.models.Customer.stripe_customer", new_callable=PropertyMock,
@@ -464,75 +493,91 @@ class TestCustomer(TestCase):
 
         self.assertFalse(record_charge_mock.called)
 
-    @patch("djstripe.models.Customer.stripe_customer", new_callable=PropertyMock, return_value=PropertyMock(subscription=None))
+    @patch("djstripe.models.Customer.stripe_customer", new_callable=PropertyMock,
+           return_value=PropertyMock(subscriptions=PropertyMock(data=[], count=0)))
     def test_sync_current_subscription_no_stripe_subscription(self, stripe_customer_mock):
         self.assertEqual(None, self.customer.sync_current_subscription())
 
     @patch("djstripe.models.djstripe_settings.plan_from_stripe_id", return_value="test_plan")
     @patch("djstripe.models.convert_tstamp", return_value=timezone.make_aware(datetime.datetime(2015, 6, 19)))
-    @patch("djstripe.models.Customer.current_subscription", new_callable=PropertyMock, return_value=fake_current_subscription)
-    @patch("djstripe.models.Customer.stripe_customer", new_callable=PropertyMock, return_value=PropertyMock(subscription=PropertyMock(plan=PropertyMock(id="fish", amount=5000),
-                                                                                                                                      quantity=5,
-                                                                                                                                      trial_start=False,
-                                                                                                                                      trial_end=False,
-                                                                                                                                      cancel_at_period_end=False,
-                                                                                                                                      status="tree")))
-    def test_sync_current_subscription_update_no_trial(self, stripe_customer_mock, customer_subscription_mock, convert_tstamp_fake, plan_getter_mock):
+    @patch("djstripe.models.Customer.stripe_customer", new_callable=PropertyMock,
+           return_value=PropertyMock(subscriptions=PropertyMock(count=1,
+                                                                data=[PropertyMock(plan=PropertyMock(id="fish", amount=5000),
+                                                                                   quantity=5,
+                                                                                   trial_start=False,
+                                                                                   trial_end=False,
+                                                                                   cancel_at_period_end=False,
+                                                                                   status="tree")])))
+    def test_sync_current_subscription_update_no_trial(self, stripe_customer_mock, convert_tstamp_fake, plan_getter_mock):
         tz_test_time = timezone.make_aware(datetime.datetime(2015, 6, 19))
 
+        self.create_subscription()
         self.customer.sync_current_subscription()
+        subscription = self.customer.subscriptions.all()[0]
 
         #plan_getter_mock.assert_called_with("fish")
 
-        self.assertEqual(fish_plan, self.fake_current_subscription.plan)
-        self.assertEqual(decimal.Decimal("50.00"), self.fake_current_subscription.amount)
-        self.assertEqual("tree", self.fake_current_subscription.status)
-        self.assertEqual(5, self.fake_current_subscription.quantity)
-        self.assertEqual(False, self.fake_current_subscription.cancel_at_period_end)
-        self.assertEqual(tz_test_time, self.fake_current_subscription.canceled_at)
-        self.assertEqual(tz_test_time, self.fake_current_subscription.start)
-        self.assertEqual(tz_test_time, self.fake_current_subscription.current_period_start)
-        self.assertEqual(tz_test_time, self.fake_current_subscription.current_period_end)
-        self.assertEqual(None, self.fake_current_subscription.trial_start)
-        self.assertEqual(None, self.fake_current_subscription.trial_end)
+        self.assertEqual(fish_plan, subscriptions.plan)
+        self.assertEqual(decimal.Decimal("50.00"), subscription.amount)
+        self.assertEqual("tree", subscription.status)
+        self.assertEqual(5, subscription.quantity)
+        self.assertEqual(False, subscription.cancel_at_period_end)
+        self.assertEqual(tz_test_time, subscription.canceled_at)
+        self.assertEqual(tz_test_time, subscription.start)
+        self.assertEqual(tz_test_time, subscription.current_period_start)
+        self.assertEqual(tz_test_time, subscription.current_period_end)
+        self.assertEqual(None, subscription.trial_start)
+        self.assertEqual(None, subscription.trial_end)
+
+    @patch("djstripe.models.Customer.stripe_customer", new_callable=PropertyMock, return_value=PropertyMock(subscriptions=PropertyMock(count=0)))
+    def test_sync_current_subscription_subscription_cancelled_from_Stripe(self, stripe_customer_mock):
+        self.create_subscription()
+        self.assertEqual(Subscription.STATUS_CANCELLED, self.customer.sync_current_subscription().status)
 
     @patch("djstripe.models.Customer.send_invoice")
     @patch("djstripe.models.Customer.sync_current_subscription")
-    @patch("djstripe.models.Customer.stripe_customer.update_subscription")
+    @patch("djstripe.models.Customer.stripe_customer.subscriptions.create")
+    @patch("djstripe.models.Customer.matching_stripe_subscription")
     @patch("djstripe.models.Customer.stripe_customer", new_callable=PropertyMock, return_value=PropertyMock())
-    def test_subscribe_trial_plan(self, stripe_customer_mock, update_subscription_mock, sync_subscription_mock, send_invoice_mock):
+    def test_subscribe_trial_plan(self, stripe_customer_mock, matching_subscription_mock, create_subscription_mock, sync_subscription_mock, send_invoice_mock):
+        matching_subscription_mock.return_value = None
+        
         trial_days = 7  # From settings
 
         self.customer.subscribe(plan="test_trial")
         sync_subscription_mock.assert_called_once_with()
         send_invoice_mock.assert_called_once_with()
 
-        _, call_kwargs = update_subscription_mock.call_args
+        _, call_kwargs = create_subscription_mock.call_args
 
         self.assertIn("trial_end", call_kwargs)
-        self.assertLess(call_kwargs["trial_end"], timezone.now() + datetime.timedelta(days=trial_days))
+        self.assertLessEqual(call_kwargs["trial_end"], timezone.now() + datetime.timedelta(days=trial_days))
 
     @patch("djstripe.models.Customer.send_invoice")
     @patch("djstripe.models.Customer.sync_current_subscription")
-    @patch("djstripe.models.Customer.stripe_customer.update_subscription")
+    @patch("djstripe.models.Customer.stripe_customer.subscriptions.create")
+    @patch("djstripe.models.Customer.matching_stripe_subscription")
     @patch("djstripe.models.Customer.stripe_customer", new_callable=PropertyMock, return_value=PropertyMock())
-    def test_subscribe_trial_days_kwarg(self, stripe_customer_mock, update_subscription_mock, sync_subscription_mock, send_invoice_mock):
+    def test_subscribe_trial_days_kwarg(self, stripe_customer_mock, matching_subscription_mock, create_subscription_mock, sync_subscription_mock, send_invoice_mock):
+        matching_subscription_mock.return_value = None
+        
         trial_days = 9
 
         self.customer.subscribe(plan="test_trial_9", trial_days=trial_days)
         sync_subscription_mock.assert_called_once_with()
         send_invoice_mock.assert_called_once_with()
 
-        _, call_kwargs = update_subscription_mock.call_args
+        _, call_kwargs = create_subscription_mock.call_args
 
         self.assertIn("trial_end", call_kwargs)
-        self.assertLess(call_kwargs["trial_end"], timezone.now() + datetime.timedelta(days=trial_days))
+        self.assertLessEqual(call_kwargs["trial_end"], timezone.now() + datetime.timedelta(days=trial_days))
 
     @patch("djstripe.models.Customer.send_invoice")
     @patch("djstripe.models.Customer.sync_current_subscription")
     @patch("djstripe.models.Customer.current_subscription", new_callable=PropertyMock, return_value=fake_current_subscription)
+    @patch("djstripe.models.Customer.matching_stripe_subscription", return_value=None)
     @patch("djstripe.models.Customer.stripe_customer", new_callable=PropertyMock, return_value=PropertyMock())
-    def test_subscribe_not_charge_immediately(self, stripe_customer_mock, customer_subscription_mock, sync_subscription_mock, send_invoice_mock):
+    def test_subscribe_not_charge_immediately(self, stripe_customer_mock, matching_subscription_mock, customer_subscription_mock, sync_subscription_mock, send_invoice_mock):
         self.customer.subscribe(plan="basic_id", charge_immediately=False)
         sync_subscription_mock.assert_called_once_with()
         self.assertFalse(send_invoice_mock.called)

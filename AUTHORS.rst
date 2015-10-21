@@ -39,3 +39,6 @@ Contributors
 * Ben Murden (@benmurden)
 * Philippe Luickx (@philippeluickx)
 * Chriss Mejía (@chrissmejia)
+* Bill Huneke (@wahuneke)
+* Matt Shaw (@unformatt)
+* Chris Trengove (@ctrengove)
