@@ -28,7 +28,7 @@ class EventTest(TestCase):
         "data": {
             "object": {
                 "account_balance": 0,
-                "active_card": None,
+                "default_card": None,
                 "created": 1363911708,
                 "delinquent": False,
                 "description": None,
@@ -80,7 +80,7 @@ class EventTest(TestCase):
             "data": {
                 "object": {
                     "account_balance": 0,
-                    "active_card": None,
+                    "default_card": None,
                     "created": 1363911708,
                     "delinquent": False,
                     "description": None,
@@ -115,7 +115,7 @@ class EventTest(TestCase):
             "data": {
                 "object": {
                     "account_balance": 0,
-                    "active_card": {
+                    "default_card": {
                         "address_city": None,
                         "address_country": None,
                         "address_line1": None,
@@ -145,7 +145,7 @@ class EventTest(TestCase):
                     "subscription": None
                 },
                 "previous_attributes": {
-                    "active_card": None
+                    "default_card": None
                 }
             },
             "id": "evt_xxxxxxxxxxxxx",
@@ -171,7 +171,7 @@ class EventTest(TestCase):
             "data": {
                 "object": {
                     "account_balance": 0,
-                    "active_card": None,
+                    "default_card": None,
                     "created": 1348286302,
                     "delinquent": False,
                     "description": None,
@@ -376,7 +376,7 @@ class EventTest(TestCase):
             "data": {
                 "object": {
                     "account_balance": 0,
-                    "active_card": None,
+                    "default_card": None,
                     "created": 1348286302,
                     "delinquent": False,
                     "description": None,

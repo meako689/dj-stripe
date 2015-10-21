@@ -438,11 +438,11 @@ class Customer(StripeObject):
         stripe_customer = self.stripe_customer
         stripe_customer.card = token
         stripe_customer.save()
-        self.card_fingerprint = stripe_customer.active_card.fingerprint
-        self.card_last_4 = stripe_customer.active_card.last4
-        self.card_kind = stripe_customer.active_card.type
-        self.card_exp_month = stripe_customer.active_card.exp_month
-        self.card_exp_year = stripe_customer.active_card.exp_year
+        self.card_fingerprint = stripe_customer.default_card.fingerprint
+        self.card_last_4 = stripe_customer.default_card.last4
+        self.card_kind = stripe_customer.default_card.type
+        self.card_exp_month = stripe_customer.default_card.exp_month
+        self.card_exp_year = stripe_customer.default_card.exp_year
         self.save()
         card_changed.send(sender=self, stripe_response=stripe_customer)
 
@@ -469,12 +469,12 @@ class Customer(StripeObject):
         if getattr(stripe_customer, 'deleted', False):
             # Customer was deleted from stripe
             self.purge()
-        elif getattr(stripe_customer, 'active_card', None):
-            self.card_fingerprint = stripe_customer.active_card.fingerprint
-            self.card_last_4 = stripe_customer.active_card.last4
-            self.card_kind = stripe_customer.active_card.type
-            self.card_exp_month = stripe_customer.active_card.exp_month
-            self.card_exp_year = stripe_customer.active_card.exp_year
+        elif getattr(stripe_customer, 'default_card', None):
+            self.card_fingerprint = stripe_customer.default_card.fingerprint
+            self.card_last_4 = stripe_customer.default_card.last4
+            self.card_kind = stripe_customer.default_card.type
+            self.card_exp_month = stripe_customer.default_card.exp_month
+            self.card_exp_year = stripe_customer.default_card.exp_year
             self.save()
 
     # TODO refactor, deprecation on cu parameter -> stripe_customer

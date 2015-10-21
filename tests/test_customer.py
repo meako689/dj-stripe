@@ -348,7 +348,7 @@ class TestCustomer(TestCase):
     @patch("djstripe.models.Customer.stripe_customer", new_callable=PropertyMock)
     def test_update_card(self, customer_stripe_customer_mock):
         customer_stripe_customer_mock.return_value = PropertyMock(
-            active_card=PropertyMock(
+            default_card=PropertyMock(
                 fingerprint="test_fingerprint",
                 last4="1234",
                 type="test_type",
@@ -411,9 +411,9 @@ class TestCustomer(TestCase):
         invoice_create_mock.assert_called_once_with(customer=self.customer.stripe_id)
 
     @patch("djstripe.models.Customer.stripe_customer", new_callable=PropertyMock)
-    def test_sync_active_card(self, stripe_customer_mock):
+    def test_sync_default_card(self, stripe_customer_mock):
         stripe_customer_mock.return_value = PropertyMock(
-            active_card=PropertyMock(
+            default_card=PropertyMock(
                 fingerprint="cherry",
                 last4="4429",
                 type="apple",
@@ -431,7 +431,7 @@ class TestCustomer(TestCase):
         self.assertEqual(2020, self.customer.card_exp_year)
 
     @patch("djstripe.models.Customer.stripe_customer", new_callable=PropertyMock,
-           return_value=PropertyMock(active_card=None, deleted=False))
+           return_value=PropertyMock(default_card=None, deleted=False))
     def test_sync_no_card(self, stripe_customer_mock):
         self.customer.sync()
         self.assertEqual("YYYYYYYY", self.customer.card_fingerprint)

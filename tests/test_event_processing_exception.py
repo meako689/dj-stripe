@@ -21,7 +21,7 @@ class TestEventProcessingException(TestCase):
             "data": {
                 "object": {
                     "account_balance": 0,
-                    "active_card": None,
+                    "default_card": None,
                     "created": 1363911708,
                     "delinquent": False,
                     "description": None,
@@ -45,7 +45,7 @@ class TestEventProcessingException(TestCase):
             "data": {
                 "object": {
                     "account_balance": 0,
-                    "active_card": None,
+                    "default_card": None,
                     "created": 1363911708,
                     "delinquent": False,
                     "description": None,
